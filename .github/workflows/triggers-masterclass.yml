@@ -1,0 +1,144 @@
+name: "Triggers & Event Routing Masterclass"
+
+# =============================================================================
+# ENTERPRISE GITHUB ACTIONS TRIGGERS GUIDE
+# This workflow documents and demonstrates all major GitHub Actions triggers,
+# filtering mechanisms, and the critical rules regarding Default Branch behaviors.
+# =============================================================================
+
+on:
+  # ---------------------------------------------------------------------------
+  # 1. PUSH TRIGGER (Works on ANY branch specified)
+  # ---------------------------------------------------------------------------
+  push:
+    branches:
+      - main                # Triggers on push to main
+      - 'release/**'        # Wildcard matching (e.g., release/v1.0, release/v2.1)
+      - '!feature/**'       # Negative pattern: Exclude all feature branches
+    tags:
+      - 'v*.*.*'            # Triggers on version tags (e.g., v1.0.0, v2.4.1)
+    paths:
+      - 'app/**'            # Only triggers if files in 'app/' directory changed
+      - 'requirements.txt'
+    paths-ignore:
+      - '**.md'             # Ignores documentation/markdown changes (saves runner cost)
+      - 'docs/**'
+
+  # ---------------------------------------------------------------------------
+  # 2. PULL REQUEST TRIGGER (Works on ANY branch targeting specified base)
+  # ---------------------------------------------------------------------------
+  pull_request:
+    branches:
+      - main
+      - develop
+    # Activity types control when during PR lifecycle the workflow executes:
+    types:
+      - opened              # When PR is first created
+      - synchronize         # When new commits are pushed to the PR branch
+      - reopened            # When a closed PR is reopened
+      - ready_for_review    # When a Draft PR is marked ready for review
+
+  # ---------------------------------------------------------------------------
+  # 3. WORKFLOW DISPATCH (Manual UI / API Trigger - Select ANY branch in UI!)
+  # ---------------------------------------------------------------------------
+  workflow_dispatch:
+    inputs:
+      target-environment:
+        description: "Target Cloud Deployment Environment"
+        required: true
+        type: choice
+        options:
+          - "development"
+          - "staging"
+          - "production"
+        default: "development"
+      run-security-scan:
+        description: "Execute Deep SAST / Container Security Scan"
+        required: false
+        type: boolean
+        default: true
+      custom-log-level:
+        description: "Logging verbosity (DEBUG, INFO, WARN)"
+        required: false
+        type: string
+        default: "INFO"
+
+  # ---------------------------------------------------------------------------
+  # 4. SCHEDULE TRIGGER (⚠️ CRITICAL RULE: Works ONLY on Default/Main Branch!)
+  # If you commit a schedule trigger to a feature branch, GitHub will IGNORE it!
+  # It must be committed and merged to the repository's DEFAULT branch to fire.
+  # ---------------------------------------------------------------------------
+  schedule:
+    # Standard 5-field Cron syntax: Minute Hour Day-of-Month Month Day-of-Week (UTC)
+    - cron: '0 2 * * *'     # Runs daily at 02:00 AM UTC (Nightly Regression / Scans)
+
+  # ---------------------------------------------------------------------------
+  # 5. WORKFLOW RUN (Chaining: Runs after another workflow completes)
+  # ⚠️ CRITICAL RULE: Must be present on the DEFAULT/MAIN branch!
+  # ---------------------------------------------------------------------------
+  workflow_run:
+    workflows: ["Main Orchestration Pipeline"]
+    types:
+      - completed           # Runs when target workflow finishes (success or failure)
+    branches:
+      - main
+
+  # ---------------------------------------------------------------------------
+  # 6. REPOSITORY DISPATCH (External Webhook Trigger from Jira/ServiceNow/APIs)
+  # ⚠️ CRITICAL RULE: Defaults to running against the DEFAULT/MAIN branch commit
+  # unless the external API client explicitly specifies a 'ref' in the payload.
+  # ---------------------------------------------------------------------------
+  repository_dispatch:
+    types:
+      - external-release-trigger
+      - servicenow-change-approved
+
+# Concurrency management: automatically cancels stale in-progress runs on new commits
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  inspect-trigger-event:
+    name: "Analyze Trigger [Event: ${{ github.event_name }}]"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Inspect Execution Context & Trigger Metadata
+        run: |
+          echo "================================================================"
+          echo "Triggered By Event    : ${{ github.event_name }}"
+          echo "Triggered On Branch   : ${{ github.ref_name }} (Ref: ${{ github.ref }})"
+          echo "Triggering Actor      : ${{ github.actor }}"
+          echo "Workflow Run Number   : ${{ github.run_number }}"
+          echo "Commit SHA            : ${{ github.sha }}"
+          echo "================================================================"
+
+      - name: Handle Manual Input Parameters (if workflow_dispatch)
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          echo "Selected Target Environment : ${{ inputs.target-environment }}"
+          echo "Security Scan Enabled       : ${{ inputs.run-security-scan }}"
+          echo "Configured Log Level        : ${{ inputs.custom-log-level }}"
+
+      - name: Handle Chained Workflow Telemetry (if workflow_run)
+        if: ${{ github.event_name == 'workflow_run' }}
+        run: |
+          echo "Parent Workflow Name   : ${{ github.event.workflow_run.name }}"
+          echo "Parent Workflow Status : ${{ github.event.workflow_run.conclusion }}"
+          if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
+            echo "Warning: Upstream parent workflow did not succeed!"
+          fi
+
+      - name: Handle Nightly Schedule Diagnostics (if schedule)
+        if: ${{ github.event_name == 'schedule' }}
+        run: |
+          echo "Nightly Automated Maintenance Job Activated via UTC Cron schedule."
+
+      - name: Handle External Webhook Payload (if repository_dispatch)
+        if: ${{ github.event_name == 'repository_dispatch' }}
+        run: |
+          echo "Triggered from External System via Webhook!"
+          echo "Client Action Type: ${{ github.event.action }}"
