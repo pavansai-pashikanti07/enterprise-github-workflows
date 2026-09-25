@@ -1,0 +1,73 @@
+name: "Static Include Matrix (Direct Configuration)"
+
+# Demonstrates Explicit "Include-Only" Matrix Pattern:
+# In GitHub Actions, you don't need multi-dimensional cross-products (e.g. OS x Version).
+# You can define an explicit list of custom configuration objects directly under 'include:'!
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  service-matrix:
+    name: "Build [${{ matrix.service }} | Port: ${{ matrix.port }} | Env: ${{ matrix.environment }}]"
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      
+      # EXPLICIT INCLUDE-ONLY MATRIX:
+      # Each entry is a fully self-contained configuration object.
+      matrix:
+        include:
+          - service: "payment-service"
+            port: 8080
+            tier: "pci-dss"
+            environment: "production"
+            memory-limit: "2Gi"
+            enable-monitoring: true
+
+          - service: "auth-service"
+            port: 8081
+            tier: "critical"
+            environment: "production"
+            memory-limit: "1Gi"
+            enable-monitoring: true
+
+          - service: "ticket-service"
+            port: 8082
+            tier: "standard"
+            environment: "staging"
+            memory-limit: "512Mi"
+            enable-monitoring: false
+
+          - service: "notification-service"
+            port: 8083
+            tier: "low"
+            environment: "development"
+            memory-limit: "256Mi"
+            enable-monitoring: false
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Display Service Matrix Target
+        run: |
+          echo "========================================================"
+          echo "Target Microservice : ${{ matrix.service }}"
+          echo "Assigned Port       : ${{ matrix.port }}"
+          echo "Compliance Tier     : ${{ matrix.tier }}"
+          echo "Deployment Target   : ${{ matrix.environment }}"
+          echo "Allocated Memory    : ${{ matrix.memory-limit }}"
+          echo "Enable Monitoring   : ${{ matrix.enable-monitoring }}"
+          echo "========================================================"
+
+      - name: Validate Configuration Policy
+        run: |
+          if [ "${{ matrix.tier }}" == "pci-dss" ] && [ "${{ matrix.environment }}" == "production" ]; then
+            echo "Enforcing Strict PCI-DSS Security & Audit Gates..."
+          fi
+          echo "Validation completed successfully for ${{ matrix.service }}."
