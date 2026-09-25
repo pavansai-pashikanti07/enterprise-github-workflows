@@ -36,7 +36,7 @@ enterprise-github-workflows/
 * **When to use:** When multiple jobs/workflows need to repeat identical sequential steps (e.g., setting up Python, configuring pip caching, installing CLI tools).
 * **Key Features in this repo:**
   * Defines clean `inputs` with defaults (`python-version`, `enable-cache`).
-  * Employs `actions/cache@v4` with dynamic hash keys (`hashFiles('requirements.txt')`).
+  * Employs `actions/cache@v6` with dynamic hash keys (`hashFiles('requirements.txt')`).
   * Exports `outputs` (`version`, `cache-hit`) back to the calling workflow.
 
 ---

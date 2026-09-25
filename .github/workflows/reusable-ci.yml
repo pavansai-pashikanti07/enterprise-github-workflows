@@ -50,7 +50,7 @@ jobs:
       coverage-score: ${{ steps.record-outcome.outputs.coverage }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Application Runtime via Composite Action
         id: setup-env
