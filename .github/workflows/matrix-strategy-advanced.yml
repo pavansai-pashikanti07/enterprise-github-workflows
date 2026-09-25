@@ -64,13 +64,15 @@ jobs:
 
       - name: Execute Test Suite on ${{ matrix.os }}
         shell: bash
+        env:
+          PYTHONPATH: .
         run: |
           echo "=========================================="
           echo "Running on OS: ${{ matrix.os }}"
           echo "Python Version: ${{ matrix.python-version }}"
           echo "Experimental build: ${{ matrix.experimental || false }}"
           echo "=========================================="
-          pytest -v tests/
+          python -m pytest -v tests/
 
       - name: Run Smoke Test on Core Service
         shell: bash

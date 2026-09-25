@@ -69,9 +69,11 @@ jobs:
 
       - name: Run Unit Tests with Coverage
         if: ${{ inputs.run-tests == true }}
+        env:
+          PYTHONPATH: .
         run: |
           echo "::group::Pytest & Coverage Execution"
-          pytest -v --cov=app --cov-report=term-missing tests/
+          python -m pytest -v --cov=app --cov-report=term-missing tests/
           echo "::endgroup::"
 
       - name: Simulate SonarQube Quality Gate Check
