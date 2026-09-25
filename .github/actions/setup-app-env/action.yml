@@ -1,0 +1,61 @@
+name: "Setup Python Application Environment"
+description: "Enterprise Composite Action to setup Python, configure pip caching, install dependencies, and output runtime metadata."
+author: "Pavan Sai Pashikanti"
+
+inputs:
+  python-version:
+    description: "Version of Python to install (e.g. '3.10', '3.11', '3.12')"
+    required: false
+    default: "3.11"
+  requirements-file:
+    description: "Path to requirements.txt file"
+    required: false
+    default: "requirements.txt"
+  enable-cache:
+    description: "Whether to enable pip caching to speed up builds"
+    required: false
+    default: "true"
+
+outputs:
+  python-version:
+    description: "The exact installed Python version"
+    value: ${{ steps.get-version.outputs.version }}
+  cache-hit:
+    description: "Whether pip cache was restored"
+    value: ${{ steps.pip-cache.outputs.cache-hit }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python Runtime
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Cache Pip Dependencies
+      if: ${{ inputs.enable-cache == 'true' }}
+      id: pip-cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles(inputs.requirements-file) }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install Dependencies
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f "${{ inputs.requirements-file }}" ]; then
+          pip install -r "${{ inputs.requirements-file }}"
+        else
+          echo "Warning: ${{ inputs.requirements-file }} not found. Skipping pip install."
+        fi
+
+    - name: Export Runtime Metadata
+      id: get-version
+      shell: bash
+      run: |
+        INSTALLED_VER=$(python --version)
+        echo "version=$INSTALLED_VER" >> $GITHUB_OUTPUT
+        echo "Successfully configured environment with: $INSTALLED_VER"

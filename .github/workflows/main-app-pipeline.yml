@@ -1,0 +1,57 @@
+name: "Main Orchestration Pipeline"
+
+# Enterprise Caller Workflow:
+# 1. Manages concurrency to cancel redundant runs on rapid commits
+# 2. Calls Reusable CI Workflow template with environment parameters
+# 3. Chains downstream deployment with strict dependency management
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target-env:
+        description: "Deployment Environment"
+        required: true
+        type: choice
+        options:
+          - "development"
+          - "staging"
+          - "production"
+        default: "development"
+
+# Concurrency management: cancel outdated runs for the same branch/PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  call-reusable-ci:
+    name: "Invoke Reusable CI Governance Gate"
+    uses: ./.github/workflows/reusable-ci.yml
+    with:
+      python-version: "3.11"
+      run-linter: true
+      run-tests: true
+      environment: ${{ inputs.target-env || 'development' }}
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  post-ci-deployment-gate:
+    name: "Trigger CD Release Gate"
+    needs: [call-reusable-ci]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect CI Telemetry Outputs
+        run: |
+          echo "CI Pipeline Outcome: ${{ needs.call-reusable-ci.outputs.test-outcome }}"
+          echo "Reported Coverage  : ${{ needs.call-reusable-ci.outputs.coverage-score }}%"
+          echo "Ready to trigger GitOps deployment sync via ArgoCD!"
+
+      - name: Simulate GitOps Tag Update
+        run: |
+          RELEASE_TAG="v1.0.${{ github.run_number }}"
+          echo "Deploying Release Artifact: $RELEASE_TAG"
+          echo "GitOps manifest updated with image tag: $RELEASE_TAG"

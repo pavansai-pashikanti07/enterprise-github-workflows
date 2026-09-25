@@ -1,0 +1,78 @@
+name: "Advanced Matrix Testing & Cross-Platform Strategy"
+
+# Demonstrates Enterprise Multi-Dimensional Matrix Configurations:
+# 1. Multi-OS & Multi-Version combinations
+# 2. fail-fast: false (prevents early termination on single failure)
+# 3. max-parallel (throttles concurrent runner load)
+# 4. include (adds custom configurations or extra combinations)
+# 5. exclude (removes incompatible OS/runtime pairs)
+# 6. continue-on-error with experimental builds
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  cross-platform-matrix:
+    name: "Matrix [${{ matrix.os }} | Py ${{ matrix.python-version }} | Experimental: ${{ matrix.experimental || false }}]"
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.allow-failure || false }}
+
+    strategy:
+      # If fail-fast is true (default), GitHub cancels all in-progress jobs if any job fails.
+      # Setting fail-fast to false ensures we see complete cross-platform test results.
+      fail-fast: false
+
+      # Limits the number of concurrent jobs to avoid runner starvation
+      max-parallel: 4
+
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12"]
+
+        # EXCLUDE: Remove unsupported or deprecated combinations
+        exclude:
+          - os: windows-latest
+            python-version: "3.10"
+
+        # INCLUDE: Add custom attributes to existing combinations OR add distinct combinations
+        include:
+          # Add macOS combo with special flags
+          - os: macos-latest
+            python-version: "3.12"
+            experimental: false
+            runner-tag: "apple-silicon"
+
+          # Tag Python 3.12 on Ubuntu as cutting-edge/experimental
+          - os: ubuntu-latest
+            python-version: "3.12"
+            experimental: true
+            allow-failure: false
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Application Runtime via Composite Action
+        uses: ./.github/actions/setup-app-env
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: "true"
+
+      - name: Execute Test Suite on ${{ matrix.os }}
+        shell: bash
+        run: |
+          echo "=========================================="
+          echo "Running on OS: ${{ matrix.os }}"
+          echo "Python Version: ${{ matrix.python-version }}"
+          echo "Experimental build: ${{ matrix.experimental || false }}"
+          echo "=========================================="
+          pytest -v tests/
+
+      - name: Run Smoke Test on Core Service
+        shell: bash
+        run: |
+          python app/main.py

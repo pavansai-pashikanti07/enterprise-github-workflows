@@ -1,0 +1,69 @@
+name: "Dynamic Matrix Generation (Runtime Calculated)"
+
+# Demonstrates 2-Stage Dynamic Matrix Pipeline:
+# Stage 1: Discovers active targets/services and generates JSON array output.
+# Stage 2: Evaluates matrix at runtime using ${{ fromJson(...) }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      target-tier:
+        description: "Target Tier to build"
+        required: true
+        type: choice
+        options:
+          - "all"
+          - "core-only"
+          - "critical"
+        default: "all"
+
+jobs:
+  matrix-generator:
+    name: "Stage 1: Discover Services & Generate Matrix"
+    runs-on: ubuntu-latest
+    outputs:
+      matrix-config: ${{ steps.build-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Calculate Dynamic Matrix Payload
+        id: build-matrix
+        shell: bash
+        run: |
+          echo "Selected Tier: ${{ inputs.target-tier }}"
+          
+          # In an enterprise monorepo, this script inspects git diffs or service catalogs
+          if [ "${{ inputs.target-tier }}" == "core-only" ]; then
+            JSON_PAYLOAD='{"include":[{"service":"auth-service","port":8081,"tier":"critical"},{"service":"ticket-service","port":8082,"tier":"standard"}]}'
+          elif [ "${{ inputs.target-tier }}" == "critical" ]; then
+            JSON_PAYLOAD='{"include":[{"service":"payment-service","port":8080,"tier":"pci-dss"},{"service":"auth-service","port":8081,"tier":"critical"}]}'
+          else
+            JSON_PAYLOAD='{"include":[{"service":"payment-service","port":8080,"tier":"pci-dss"},{"service":"auth-service","port":8081,"tier":"critical"},{"service":"ticket-service","port":8082,"tier":"standard"},{"service":"notification-service","port":8083,"tier":"low"}]}'
+          fi
+
+          echo "Generated Matrix Payload: $JSON_PAYLOAD"
+          # Export JSON string as output for downstream job consumption
+          echo "matrix=$JSON_PAYLOAD" >> $GITHUB_OUTPUT
+
+  dynamic-worker:
+    name: "Stage 2: Process [${{ matrix.service }} (Port ${{ matrix.port }})]"
+    needs: [matrix-generator]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.matrix-generator.outputs.matrix-config) }}
+      fail-fast: false
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Dynamic Worker Job
+        run: |
+          echo "================================================="
+          echo "Processing Service : ${{ matrix.service }}"
+          echo "Service Port       : ${{ matrix.port }}"
+          echo "Compliance Tier    : ${{ matrix.tier }}"
+          echo "================================================="
+          echo "Simulating container build and configuration audit..."
+          sleep 2
+          echo "Completed validation for ${{ matrix.service }} successfully."
