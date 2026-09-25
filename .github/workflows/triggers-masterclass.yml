@@ -20,9 +20,10 @@ on:
     paths:
       - 'app/**'            # Only triggers if files in 'app/' directory changed
       - 'requirements.txt'
-    paths-ignore:
-      - '**.md'             # Ignores documentation/markdown changes (saves runner cost)
-      - 'docs/**'
+      # ⚠️ INTERVIEW GOTCHA: You CANNOT use both 'paths' and 'paths-ignore' in the same event!
+      # To ignore files while using 'paths', use negative patterns starting with '!'
+      - '!**.md'            # Ignores documentation/markdown changes (saves runner cost)
+      - '!docs/**'
 
   # ---------------------------------------------------------------------------
   # 2. PULL REQUEST TRIGGER (Works on ANY branch targeting specified base)
